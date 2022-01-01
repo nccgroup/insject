@@ -1,0 +1,3 @@
+[build]
+rustflags = ["-C", "relocation-model=pic",
+             "-C", "link-args=-Wl,-Bstatic -L /mnt/hgfs/psc/insject/setns-so/frida/x86_64-unknown-linux-gnu -lfrida-gum -L /mnt/hgfs/psc/insject/setns-so/target/release/build/setns-b1dfcc80dea94804/out -l frida-gum-wrapper"]

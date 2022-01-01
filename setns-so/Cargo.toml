@@ -1,0 +1,27 @@
+[package]
+name = "setns"
+version = "1.0.0"
+authors = ["jeff.dileo@nccgroup.com"]
+
+[lib]
+name = "setns"
+#crate-type = ["dylib"]
+crate-type = ["cdylib"]
+#crate-type = ["staticlib"]
+
+[[bin]]
+name = "insject"
+path = "src/main.rs"
+
+[dependencies]
+#gumshoe = { path = "../../frida-gum-rs" }
+gumshoe = { git = "https://github.com/ChaosData/frida-gum-rs" }
+setns-common = { path = "../setns-common" }
+clap = "3.0.0-beta.2"
+libc = "0.2"
+
+[build-dependencies]
+#gumshoe = { path = "../../frida-gum-rs" }
+gumshoe = { git = "https://github.com/ChaosData/frida-gum-rs" }
+cc = "1.0"
+base64 = "0.13"
