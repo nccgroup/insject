@@ -104,6 +104,39 @@ uid=0(root) gid=85(usb) groups=0(root),1(bin),2(daemon),3(sys),4(adm)
 ## Usage
 
 ```
+$ insject --help
+insject 1.0
+Jeff Dileo <jeff.dileo@nccgroup.com>
+A tool to simplify container testing that runs an arbitrary
+command in the Linux namespaces of other processes.
+
+WARNING: Be careful when accessing or executing files in containers as they may
+         be able to abuse the access of the joined process to escape.
+Note: Forking is not supported with -!.
+
+USAGE:
+    insject [FLAGS] [OPTIONS] [setns-opts]... [-- <cmd>...]
+
+ARGS:
+    <setns-opts>...    setns.so options. For detailed information, use --help-setns
+    <cmd>...           
+
+FLAGS:
+    -h, --help          Prints help information
+        --help-setns    Prints help information for setns.so
+    -V, --version       Prints version information
+
+OPTIONS:
+    -! <pid>        PID to instrument
+$ insject --help-setns
+libsetns.so 1.0
+Jeff Dileo <jeff.dileo@nccgroup.com>
+An inject-/LD_PRELOAD-able shim to simplify container testing by joining an external program
+run with it into the Linux namespaces of other processes.
+
+WARNING: Be careful when accessing or executing files in containers as they may
+         be able to abuse the access of the joined process to escape.
+
 USAGE:
     libsetns.so [FLAGS] [OPTIONS] [target-pid]
 
@@ -111,10 +144,10 @@ ARGS:
     <target-pid>    PID to source namespaces from by default
 
 FLAGS:
-    -f, --fork            Fork after entering PID namespace
         --help            Prints help information
     -A, --no-apparmor     Skip setting AppArmor profile
     -C, --no-cgroup       Skip setting cgroup namespace
+    -F, --no-fork         Skip fork after entering PID namespace, if entering PID namespace
     -I, --no-ipc          Skip setting IPC namespace
     -M, --no-mnt          Skip setting mount namespace
     -N, --no-net          Skip setting network namespace
