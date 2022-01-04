@@ -41,12 +41,12 @@ use libc::*;
 #[derive(Clap,Clone,Debug)]
 #[clap(name = "insject", version = "1.0",
        author = "Jeff Dileo <jeff.dileo@nccgroup.com>",
-       about = "A tool to simplify container testing that runs an arbitrary \
-                command in the Linux namespaces\nof other processes.\n
-WARNING: Be careful when accessing or executing files in \
-         containers as they may
-         be able to abuse the access \
-         of the joined process to escape.",
+       about = "A tool to simplify container testing that runs an arbitrary\n\
+                command in the Linux namespaces of other processes.
+
+WARNING: Be careful when accessing or executing files in containers as they may
+         be able to abuse the access of the joined process to escape.
+Note: Forking is not supported with -!.",
        setting(AppSettings::ColoredHelp),
        setting(AppSettings::AllowLeadingHyphen),
        setting(AppSettings::TrailingVarArg),
@@ -222,10 +222,10 @@ fn run_cmd(opts: &InsjectOpts, setns_opts: &setns_common::Opts) {
 
 fn attach_inject(insject_opts: &InsjectOpts, opts: &setns_common::Opts) {
 
-  if opts.fork {
-    println!("Error: -f,--fork not supported with -! <pid>");
-    print_help(1);
-  }
+  // if opts.fork {
+  //   println!("Error: -f,--fork not supported with -! <pid>");
+  //   print_help(1);
+  // }
 
   if opts.strict {
     println!("Error: -S,--strict not supported with -! <pid>");

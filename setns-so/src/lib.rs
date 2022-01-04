@@ -457,12 +457,22 @@ fn ns_fd(nstype: &str, path: &Option<String>, no: bool, pid: &Option<usize>) -> 
 }
 
 fn setns_wrapper(ns_fd: Option<c_int>, nstype: c_int) -> String {
-  match ns_fd {
+  let ret = match ns_fd {
     Some(ns_fd) if ns_fd >= 0 => format!("{}", unsafe { setns(ns_fd, nstype) }),
     Some(ns_fd) if ns_fd < 0 => format!("fd:{}", ns_fd),
     _  => "N/A".to_owned()
+  };
+  let _ = close_wrapper(ns_fd);
+  ret
+}
+
+fn close_wrapper(ns_fd: Option<c_int>) -> c_int {
+  match ns_fd {
+    Some(ns_fd) if ns_fd >= 0 => unsafe { close(ns_fd) },
+    _  => { -1 }
   }
 }
+
 
 #[no_mangle]
 pub extern "C" fn do_setns_external(args: *const c_char) {
@@ -529,7 +539,6 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
     user_ns_r = setns_wrapper(user_ns_fd, CLONE_NEWUSER);
   }
 
-  let mnt_ns_r = setns_wrapper(mnt_ns_fd, CLONE_NEWNS);
   let net_ns_r = setns_wrapper(net_ns_fd, CLONE_NEWNET);
 
   //note: "CLONE_NEWTIME" is not really defined and the kernel defines it as 0,
@@ -538,8 +547,15 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
 
   let ipc_ns_r = setns_wrapper(ipc_ns_fd, CLONE_NEWIPC);
   let uts_ns_r = setns_wrapper(uts_ns_fd, CLONE_NEWUTS);
-  let pid_ns_r = setns_wrapper(pid_ns_fd, CLONE_NEWPID);
   let cgroup_ns_r = setns_wrapper(cgroup_ns_fd, CLONE_NEWCGROUP);
+
+  //note: at this moment in time in the thread doing setns for itself, we are
+  //      not doing anything else. therefore the biggest target is the PID
+  //      namespace, which only becomes an attack surface once we fork and have
+  //      the child be exposed to PID-related operations in the container.
+  let mnt_ns_r = setns_wrapper(mnt_ns_fd, CLONE_NEWNS);
+
+  let pid_ns_r = setns_wrapper(pid_ns_fd, CLONE_NEWPID);
 
   if !opts.userns_first {
     user_ns_r = setns_wrapper(user_ns_fd, CLONE_NEWUSER);
@@ -574,11 +590,12 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
       let _ = unsafe {
         write(fd, data.as_ptr() as *const c_void, s.len())
       };
+      let _ = unsafe { close(fd) };
       format!("{}", apparmor_profile)
     }
   };
 
-  if opts.fork && pid_ns_r == "0" {
+  if !opts.no_fork && pid_ns_r == "0" {
     let p = unsafe { fork() };
     if p != 0 {
       let mut status = 0;

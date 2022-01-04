@@ -110,8 +110,8 @@ pub struct Opts {
   #[clap(short, long, name = "profile", about = "Alternate AppArmor profile to set")]
   pub apparmor_profile: Option<String>,
 
-  #[clap(short, long, about = "Fork after entering PID namespace")]
-  pub fork: bool,
+  #[clap(short = 'F', long, about = "Skip fork after entering PID namespace, if entering PID namespace")]
+  pub no_fork: bool,
 
   #[clap(short = 'M', long, about = "Skip setting mount namespace")]
   pub no_mnt: bool,
@@ -202,10 +202,10 @@ pub fn parse_opts_parts(args: &std::vec::Vec<String>) -> Opts {
     print_help(1);
   }
 
-  if opts.fork && opts.no_pid {
-    println!("Error: -f,--fork not supported with -P, --no-pid");
-    print_help(1);
-  }
+  // if opts.fork && opts.no_pid {
+  //   println!("Error: -f,--fork not supported with -P, --no-pid");
+  //   print_help(1);
+  // }
 
   opts
 }
