@@ -112,14 +112,18 @@ command in the Linux namespaces of other processes.
 
 WARNING: Be careful when accessing or executing files in containers as they may
          be able to abuse the access of the joined process to escape.
-Note: Forking is not supported with -!.
+
+Note: The -! instrumentation mode has several differences from the LD_PRELOAD modes:
+        * Forking is not supported
+        * -S,--strict is not supported
+        * errno values are not returned
 
 USAGE:
     insject [FLAGS] [OPTIONS] [setns-opts]... [-- <cmd>...]
 
 ARGS:
     <setns-opts>...    setns.so options. For detailed information, use --help-setns
-    <cmd>...           
+    <cmd>...
 
 FLAGS:
     -h, --help          Prints help information
