@@ -46,7 +46,12 @@ use libc::*;
 
 WARNING: Be careful when accessing or executing files in containers as they may
          be able to abuse the access of the joined process to escape.
-Note: Forking is not supported with -!.",
+
+Note: The -! instrumentation mode has several differences from the LD_PRELOAD modes:
+        * Forking is not supported
+        * -S,--strict is not supported
+        * errno values are not returned
+",
        setting(AppSettings::ColoredHelp),
        setting(AppSettings::AllowLeadingHyphen),
        setting(AppSettings::TrailingVarArg),
@@ -382,8 +387,8 @@ if ({user_first} != 1) {{ if (user != -1) userns_r = ((int)setns(user, 0) == 0) 
 const unsigned int groups[{groups_len}] = {{ {groups} }};\
 const char* groups_r = ((int)setgroups({groups_len}, groups) == 0) ? \"0\" : \"-1\";\
 if (groups_r[0] == '-') (void)perror(\"setgroups\");\
-const char* uid_r = ((int)setuid({uid}) == 0) ? \"0\" : \"-1\";\
 const char* gid_r = ((int)setgid({gid}) == 0) ? \"0\" : \"-1\";\
+const char* uid_r = ((int)setuid({uid}) == 0) ? \"0\" : \"-1\";\
 \
 const char* changeprofile = \"{changeprofile}\";\
 if (attr_current != -1) aa_r = ((int)write(attr_current, changeprofile, {changeprofile_len}) != -1) ? \"{apparmor_profile}\" : \"-1\";\

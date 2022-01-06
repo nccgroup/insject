@@ -41,6 +41,21 @@ pub fn setup_frida_gum() {
   gumshoe::gum_init_embedded();
 }
 
+pub fn has_sym(name: &String) -> Option<GumAddress> {
+  let path = std::fs::read_link("/proc/self/exe").unwrap();
+  let path = path.to_str().unwrap();
+
+  let mut addr = gumshoe::gum_module_find_symbol_by_name(path, name.as_str());
+  if addr == 0 {
+    addr = gumshoe::gum_module_find_export_by_name("", name.as_str());
+  }
+  if addr == 0 {
+    None
+  } else {
+    Some(addr)
+  }
+}
+
 pub fn try_hook_by_sym_name(name: &String) -> bool {
   let path = std::fs::read_link("/proc/self/exe").unwrap();
   let path = path.to_str().unwrap();
@@ -368,6 +383,10 @@ pub extern "C" fn on_load() {
         },
         None => {
           // this is fine
+          if has_sym(&"main".to_string()).is_none() {
+            // early enough golang binary hook
+            try_hook_by_sym_name(&"runtime.schedule".to_string());
+          }
         }
       }
     }
@@ -443,6 +462,9 @@ fn open_for_fd(path: &String, flag: c_int) -> c_int {
 }
 
 fn ns_fd(nstype: &str, path: &Option<String>, no: bool, pid: &Option<usize>) -> Option<c_int> {
+  if no {
+    return None;
+  }
   match path {
     Some(path) => Some(open_for_fd(&path, 0)),
     None => if !no {
@@ -458,7 +480,14 @@ fn ns_fd(nstype: &str, path: &Option<String>, no: bool, pid: &Option<usize>) -> 
 
 fn setns_wrapper(ns_fd: Option<c_int>, nstype: c_int) -> String {
   let ret = match ns_fd {
-    Some(ns_fd) if ns_fd >= 0 => format!("{}", unsafe { setns(ns_fd, nstype) }),
+    Some(ns_fd) if ns_fd >= 0 => {
+      let r = unsafe { setns(ns_fd, nstype) };
+      if r < 0 {
+        format!("err:{}", unsafe { *__errno_location() } )
+      } else {
+        format!("{}", r)
+      }
+    },
     Some(ns_fd) if ns_fd < 0 => format!("fd:{}", ns_fd),
     _  => "N/A".to_owned()
   };
@@ -497,6 +526,24 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
     }
   };
 
+  {
+    let threads = match std::fs::read_dir("/proc/self/task") {
+      Ok(dir) => {
+        Some(dir.count())
+      },
+      Err(_) => None
+    };
+
+    if threads.unwrap_or(1) > 1 {
+      if opts.strict {
+        println!("[insject] strict mode: multiple threads detected -> exiting");
+        unsafe { exit(1) };
+      } else {
+        println!("[insject] wanrning: multiple threads detected");
+      }
+    }
+  }
+
   let mnt_ns_fd = ns_fd("mnt", &opts.mnt, opts.no_mnt, &opts.target_pid);
   let net_ns_fd = ns_fd("net", &opts.net, opts.no_net, &opts.target_pid);
   let time_ns_fd = ns_fd("time", &opts.time, opts.no_time, &opts.target_pid);
@@ -504,7 +551,43 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
   let uts_ns_fd = ns_fd("uts", &opts.uts, opts.no_uts, &opts.target_pid);
   let pid_ns_fd = ns_fd("pid", &opts.pid, opts.no_pid, &opts.target_pid);
   let cgroup_ns_fd = ns_fd("cgroup", &opts.cgroup, opts.no_cgroup, &opts.target_pid);
-  let user_ns_fd = ns_fd("user", &opts.userns, opts.no_userns, &opts.target_pid);
+
+  let mut same_userns = false;
+  {
+    let user_ns_path = match &opts.userns {
+      Some(path) => {
+        Some(path.clone())
+      },
+      None => {
+        match &opts.target_pid {
+          Some(pid) => {
+            Some(format!("/proc/{}/ns/user", pid))
+          },
+          None => None
+        }
+      }
+    };
+    match user_ns_path {
+      Some(path) => {
+        match std::fs::read_link(path) {
+          Ok(userns_real) => {
+            match std::fs::read_link("/proc/self/ns/user") {
+              Ok(self_userns_real) => {
+                if userns_real == self_userns_real {
+                  same_userns = true;
+                }
+              },
+              Err(_) => {}
+            };
+          },
+          Err(_) => {}
+        };
+      },
+      None => {}
+    };
+  }
+  let user_ns_fd = ns_fd("user", &opts.userns, same_userns || opts.no_userns, &opts.target_pid);
+
 
   let apparmor_profile: String = match &opts.apparmor_profile {
     Some(apparmor_profile) => (*apparmor_profile).clone(),
@@ -577,8 +660,8 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
   let groups_len = groups.len();
   let user_r = unsafe {
     let groups_r = setgroups(groups_len, groups_ptr);
-    let uid_r = setuid(uid);
     let gid_r = setgid(gid);
+    let uid_r = setuid(uid);
     format!("{}/{}/{}", uid_r, gid_r, groups_r)
   };
 
@@ -613,15 +696,16 @@ pub extern "C" fn do_setns_external(args: *const c_char) {
   }
 
   if opts.strict {
-    if  mnt_ns_r == "fd:-1" ||
-        net_ns_r == "fd:-1" ||
-        time_ns_r == "fd:-1" ||
-        ipc_ns_r == "fd:-1" ||
-        uts_ns_r == "fd:-1" ||
-        pid_ns_r == "fd:-1" ||
-        cgroup_ns_r == "fd:-1" ||
-        user_ns_r == "fd:-1" ||
-        user_r == "fd:-1" {
+    if  (mnt_ns_r != "0" && mnt_ns_r != "N/A") ||
+        (net_ns_r != "0" && net_ns_r != "N/A") ||
+        (time_ns_r != "0" && time_ns_r != "N/A") ||
+        (ipc_ns_r != "0" && ipc_ns_r != "N/A") ||
+        (uts_ns_r != "0" && uts_ns_r != "N/A") ||
+        (pid_ns_r != "0" && pid_ns_r != "N/A") ||
+        (cgroup_ns_r != "0" && cgroup_ns_r != "N/A") ||
+        (user_ns_r != "0" && user_ns_r != "N/A") ||
+        user_r.find("-1").is_some() {
+      println!("[insject] strict mode: some operations failed -> exiting");
       unsafe { exit(1) };
     }
   }
